@@ -59,6 +59,7 @@ export const defaultParamValues: Record<string, number> = {
   "/ol/ats/wet": 0.35,
   "/ol/ats/morph": 0.65,
   "/ol/ats/speed": 1,
+  "/ol/input/gain": 12,
   "/ol/eq/low": 0,
   "/ol/eq/mid": 0,
   "/ol/eq/high": 0,
@@ -168,6 +169,17 @@ export const effectGroups: EffectGroup[] = [
     ],
   },
 ];
+
+// Input gain trims the live mic before the effects chain; Sample Mode pads are unaffected.
+export const inputGainControl: SliderControl = {
+  type: "slider",
+  label: "Input Gain",
+  path: "/ol/input/gain",
+  min: -12,
+  max: 36,
+  step: 1,
+  unit: "dB",
+};
 
 // Master EQ is a final-stage tone control, separate from the performance effects row.
 export const masterEqControls: SliderControl[] = [

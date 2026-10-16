@@ -5,6 +5,7 @@ import { ConsoleLog } from "../components/ConsoleLog";
 import { DeviceSelect } from "../components/DeviceSelect";
 import { EffectCodeDialog } from "../components/EffectCodeDialog";
 import { EffectPanel } from "../components/EffectPanel";
+import { InputGainControl } from "../components/InputGainControl";
 import { MasterEqPanel } from "../components/MasterEqPanel";
 import { MidiMapBar } from "../components/MidiMapBar";
 import { SamplePadSection } from "../components/SamplePadSection";
@@ -416,6 +417,7 @@ export function Live() {
             onStop={handleStop}
             onRefresh={refresh}
           />
+          <InputGainControl values={values} onChange={handleParam} />
         </section>
       ) : null}
 

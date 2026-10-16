@@ -1679,7 +1679,8 @@ button:disabled {
   gap: 12px;
 }
 
-.master-volume-control {
+.master-volume-control,
+.input-gain-control {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(140px, 0.24fr) minmax(0, 1fr) 54px;
@@ -1693,7 +1694,8 @@ button:disabled {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
-.master-volume-control span {
+.master-volume-control span,
+.input-gain-control span {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1711,7 +1713,18 @@ button:disabled {
   accent-color: var(--violet);
 }
 
-.master-volume-control output {
+/* The console's live input trim reuses the master volume row with the console's amber accent. */
+.input-gain-control svg {
+  color: var(--amber);
+}
+
+.input-gain-control input {
+  width: 100%;
+  accent-color: var(--amber);
+}
+
+.master-volume-control output,
+.input-gain-control output {
   color: var(--text);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 13px;
@@ -1812,48 +1825,91 @@ button:disabled {
   color: var(--text);
 }
 
+/* Registering the angle lets the value arc and the pointer animate together from one variable. */
+@property --dial-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+
 .dial-face {
-  --dial-value: 50%;
   --dial-angle: 0deg;
+  --dial-origin: -135deg;
+  /* Arc stops are measured from the -135deg start of the 270deg sweep. */
+  --dial-arc-start: calc(min(var(--dial-origin), var(--dial-angle)) + 135deg);
+  --dial-arc-end: calc(max(var(--dial-origin), var(--dial-angle)) + 135deg);
   position: relative;
   width: 74px;
   aspect-ratio: 1;
   border-radius: 50%;
+  cursor: ns-resize;
+  touch-action: none;
   background:
     radial-gradient(circle at 50% 50%, var(--knob-track) 0 48%, transparent 49%),
-    conic-gradient(from 225deg, var(--violet) 0 var(--dial-value), var(--knob-rest) var(--dial-value) 75%, transparent 75% 100%);
+    conic-gradient(
+      from -135deg,
+      var(--knob-rest) 0 var(--dial-arc-start),
+      var(--violet) var(--dial-arc-start) var(--dial-arc-end),
+      var(--knob-rest) var(--dial-arc-end) 270deg,
+      transparent 270deg
+    );
   box-shadow:
     inset 0 0 0 1px rgba(var(--text-rgb), 0.08),
     inset 0 -10px 18px rgba(0, 0, 0, 0.35);
+  transition: --dial-angle 0.12s ease-out;
 }
 
+/* Direct manipulation should track the pointer without easing lag. */
+.dial-face[data-dragging] {
+  transition: none;
+}
+
+/* A small tick marks the 0 dB detent that the value arc grows from. */
+.dial-face::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background: linear-gradient(rgba(var(--text-rgb), 0.42), rgba(var(--text-rgb), 0.42)) 50% 0 / 2px 5px no-repeat;
+  transform: rotate(var(--dial-origin));
+  pointer-events: none;
+}
+
+/* The cap stays still so its top-lit shading never rotates with the value. */
 .dial-face b {
   position: absolute;
   inset: 12px;
   border-radius: 50%;
   background: linear-gradient(180deg, var(--knob-face-top), var(--knob-face-bottom));
   border: 1px solid rgba(var(--text-rgb), 0.1);
-  transform: rotate(var(--dial-angle));
-  transition: transform 0.12s ease-out;
 }
 
 .dial-face b::after {
   content: "";
   position: absolute;
-  top: 8px;
-  left: 50%;
-  width: 3px;
-  height: 18px;
-  border-radius: 999px;
-  background: var(--text);
-  transform: translateX(-50%);
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(var(--text), var(--text)) 50% 7px / 3px 16px no-repeat;
+  transform: rotate(var(--dial-angle));
 }
 
+.dial-face:has(input:focus-visible) {
+  outline: 2px solid rgba(var(--violet-rgb), 0.7);
+  outline-offset: 4px;
+}
+
+/* Keep the range input reachable by keyboard while the dial owns pointer turning. */
 .dial-face input {
   position: absolute;
-  inset: -8px;
+  inset: 0;
   opacity: 0;
-  cursor: pointer;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dial-face {
+    transition: none;
+  }
 }
 
 .console-log {

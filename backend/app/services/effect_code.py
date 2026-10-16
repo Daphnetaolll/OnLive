@@ -16,11 +16,11 @@ class EffectCodeRegion:
 
 # These line ranges point at the actual effect modules inside on_live.csd.
 EFFECT_CODE_REGIONS = (
-    EffectCodeRegion("pitch", "Pitch Shifter", 1072, 1107),
-    EffectCodeRegion("ring", "Ring Mod", 1109, 1133),
-    EffectCodeRegion("blur", "Blur", 1136, 1188),
-    EffectCodeRegion("flanger", "Flanger", 1190, 1227),
-    EffectCodeRegion("ats", "ATS Cross", 1229, 1269),
+    EffectCodeRegion("pitch", "Pitch Shifter", 1086, 1121),
+    EffectCodeRegion("ring", "Ring Mod", 1123, 1147),
+    EffectCodeRegion("blur", "Blur", 1150, 1212),
+    EffectCodeRegion("flanger", "Flanger", 1214, 1251),
+    EffectCodeRegion("ats", "ATS Cross", 1253, 1293),
 )
 
 

@@ -57,6 +57,7 @@ Live Mode features:
 - Real input/output device discovery from `csound --devices`
 - Device selectors using actual `adc` and `dac` ids
 - Channel-aware Csound launch based on selected device channel counts
+- Input Gain trim for the live mic, from `-12 dB` to `+36 dB` (default `+12 dB`)
 - Dedicated OnLive 音 Console, shown only while Live Mode is selected
 - Apply selection, Start, Stop, and Refresh controls for audio routing
 - Live input is muted when Sample Mode is selected, so sample playback does not mix with microphone feedback

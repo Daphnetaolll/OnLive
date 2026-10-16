@@ -136,6 +136,9 @@ chn_k "ats_wet", 1
 chn_k "ats_morph", 1
 chn_k "ats_speed", 1
 
+;Live input trim
+chn_k "input_gain", 1
+
 ;EQ
 chn_k "highEQ", 1
 chn_k "midEQ", 1
@@ -251,6 +254,8 @@ instr InitDefaults
     chnset 0.35, "ats_wet"
     chnset 0.65, "ats_morph"
     chnset 1, "ats_speed"
+
+    chnset 12, "input_gain"
 
     chnset 0, "lowEQ"
     chnset 0, "midEQ"
@@ -673,6 +678,12 @@ instr OSCListen
 
 		 ;_______________________
     ;EQ
+    ; Live input trim in dB, applied to the mic before the effects chain.
+    kGot OSClisten ihOSC, "/ol/input/gain", "f", kVal
+    if (kGot == 1) then
+        chnset kVal, "input_gain"
+    endif
+
     		;lowEQ
     kGot OSClisten ihOSC, "/ol/eq/low", "f", kVal
     if (kGot == 1) then
@@ -1023,10 +1034,13 @@ instr Live
     aR butterhp aR, 70
 
     ; Keep computer mic-to-speaker monitoring conservative to reduce acoustic feedback risk.
+    ; Input Gain (dB) lets quiet mics be raised on top of that conservative base trim.
     kSampleMode chnget "sample_mode"
     kSampleMode = limit(kSampleMode, 0, 1)
-    aMicL = aL * 0.32 * (1 - kSampleMode)
-    aMicR = aR * 0.32 * (1 - kSampleMode)
+    kInputGainDb chnget "input_gain"
+    kInputGain = portk(ampdb(limit(kInputGainDb, -12, 36)), 0.03)
+    aMicL = aL * 0.32 * kInputGain * (1 - kSampleMode)
+    aMicR = aR * 0.32 * kInputGain * (1 - kSampleMode)
 
     ; Sample Mode keeps dry pads and per-effect send buses separate for the web routing matrix.
     aSampleDryL = gaSampleDryL * kSampleMode
@@ -1168,9 +1182,19 @@ instr Live
     aBL  pvsynth fL
     aBR  pvsynth fR
 
-    ; balance
-    aBL = balance(aBL, aTap_L)
-    aBR = balance(aBR, aTap_R)
+    ; balance: compare against a tap delayed by the PVS latency and cap the correction,
+    ; otherwise balance multiplies pvsynth's first quiet frames by a huge gain and the start bursts.
+    iPvsLatency = ifs / sr
+    aBlurRefL delay aTap_L, iPvsLatency
+    aBlurRefR delay aTap_R, iPvsLatency
+    kBlurRefRmsL rms aBlurRefL
+    kBlurRefRmsR rms aBlurRefR
+    kBlurOutRmsL rms aBL
+    kBlurOutRmsR rms aBR
+    kBlurGainL = portk(limit(kBlurRefRmsL / max(kBlurOutRmsL, 0.0001), 0, 2), 0.02)
+    kBlurGainR = portk(limit(kBlurRefRmsR / max(kBlurOutRmsR, 0.0001), 0, 2), 0.02)
+    aBL = aBL * a(kBlurGainL)
+    aBR = aBR * a(kBlurGainR)
 
     ; Blur dry/wet（echo + blur）
     kDryBase = 0.8 - 0.6*kBlurInt
