@@ -251,6 +251,21 @@ button:disabled {
   color: var(--amber);
 }
 
+/* Reset is a neutral, labeled action so it never reads as the device refresh icon beside it. */
+.reset-action {
+  border-color: rgba(var(--violet-rgb), 0.55);
+  color: var(--text);
+}
+
+.sample-header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 .stop-action {
   border-color: rgba(var(--danger-rgb), 0.78);
   background:

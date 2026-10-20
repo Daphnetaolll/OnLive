@@ -42,6 +42,10 @@ gkSampleToken4 init 0
 gkSampleToken5 init 0
 gkSampleToken6 init 0
 gkSampleToken7 init 0
+; Beats into the current 4/4 bar, shared by every Sync-mode loop launch.
+gkTransportBeat init 0
+; Loop voices start this early, muted, so the phase vocoder is warm when the downbeat arrives.
+giLoopPreroll = 2048 / sr
 
 
 ;;channels
@@ -251,20 +255,31 @@ instr InitDefaults
 
     chnset 0, "ats_variant"
     chnset 0, "ats_on"
-    chnset 0.35, "ats_wet"
-    chnset 0.65, "ats_morph"
+    chnset 0.5, "ats_wet"
+    chnset 0.5, "ats_morph"
     chnset 1, "ats_speed"
 
-    chnset 12, "input_gain"
+    chnset 0, "input_gain"
 
     chnset 0, "lowEQ"
     chnset 0, "midEQ"
     chnset 0, "highEQ"
-    chnset 1, "master_volume"
-    chnset -3, "limiter_threshold"
-    chnset -1, "limiter_ceiling"
-    chnset 2, "limiter_attack"
-    chnset 140, "limiter_release"
+    chnset 0.5, "master_volume"
+    chnset 0, "limiter_threshold"
+    chnset 0, "limiter_ceiling"
+    chnset 30, "limiter_attack"
+    chnset 20, "limiter_release"
+endin
+
+
+; Free-running bar clock: Sync-mode loop launches wait for its next downbeat.
+instr Transport
+    kBpm chnget "transport_bpm"
+    kBpm = limit(kBpm, 40, 240)
+    gkTransportBeat = gkTransportBeat + ((kBpm / 60) * (ksmps / sr))
+    if (gkTransportBeat >= 4) then
+        gkTransportBeat = gkTransportBeat - 4
+    endif
 endin
 
 
@@ -476,51 +491,78 @@ instr OSCListen
     endif
 
     ; Each launch increments a per-pad token so any previous voice on that pad stops immediately.
+    ; In Sync mode the voice waits for the next downbeat, like Ableton's clip launch quantization;
+    ; a loop started while no other pad loops plays at once and restarts the bar grid.
     kGot OSClisten ihOSC, "/ol/sample/loop/start", "ffff", kSlot, kGain, kDur, kBars
     if (kGot == 1) then
         kGain = limit(kGain, 0, 16)
+        kLoopsBefore = gkSampleLoop0 + gkSampleLoop1 + gkSampleLoop2 + gkSampleLoop3 + gkSampleLoop4 + gkSampleLoop5 + gkSampleLoop6 + gkSampleLoop7
+        kOwnLoopBefore = 0
         if (kSlot == 0) then
+            kOwnLoopBefore = gkSampleLoop0
             gkSampleToken0 = gkSampleToken0 + 1
             gkSampleLoop0 = 1
             kToken = gkSampleToken0
             chnset kGain, "sample_gain_0"
         elseif (kSlot == 1) then
+            kOwnLoopBefore = gkSampleLoop1
             gkSampleToken1 = gkSampleToken1 + 1
             gkSampleLoop1 = 1
             kToken = gkSampleToken1
             chnset kGain, "sample_gain_1"
         elseif (kSlot == 2) then
+            kOwnLoopBefore = gkSampleLoop2
             gkSampleToken2 = gkSampleToken2 + 1
             gkSampleLoop2 = 1
             kToken = gkSampleToken2
             chnset kGain, "sample_gain_2"
         elseif (kSlot == 3) then
+            kOwnLoopBefore = gkSampleLoop3
             gkSampleToken3 = gkSampleToken3 + 1
             gkSampleLoop3 = 1
             kToken = gkSampleToken3
             chnset kGain, "sample_gain_3"
         elseif (kSlot == 4) then
+            kOwnLoopBefore = gkSampleLoop4
             gkSampleToken4 = gkSampleToken4 + 1
             gkSampleLoop4 = 1
             kToken = gkSampleToken4
             chnset kGain, "sample_gain_4"
         elseif (kSlot == 5) then
+            kOwnLoopBefore = gkSampleLoop5
             gkSampleToken5 = gkSampleToken5 + 1
             gkSampleLoop5 = 1
             kToken = gkSampleToken5
             chnset kGain, "sample_gain_5"
         elseif (kSlot == 6) then
+            kOwnLoopBefore = gkSampleLoop6
             gkSampleToken6 = gkSampleToken6 + 1
             gkSampleLoop6 = 1
             kToken = gkSampleToken6
             chnset kGain, "sample_gain_6"
         elseif (kSlot == 7) then
+            kOwnLoopBefore = gkSampleLoop7
             gkSampleToken7 = gkSampleToken7 + 1
             gkSampleLoop7 = 1
             kToken = gkSampleToken7
             chnset kGain, "sample_gain_7"
         endif
-        event "i", "SampleLoopVoice", 0, 3600, kSlot, kGain, kDur, kBars, kToken
+        kLaunchSync chnget "transport_sync"
+        kLaunchBpm chnget "transport_bpm"
+        kLaunchBpm = limit(kLaunchBpm, 40, 240)
+        kLaunchDelay = 0
+        if (kLoopsBefore - kOwnLoopBefore < 0.5) then
+            ; The first loop anchors the grid in either mode, so switching to Sync later still lines up with it.
+            ; Its downbeat sounds after the preroll, so beat 0 is placed there.
+            gkTransportBeat = -(giLoopPreroll * kLaunchBpm / 60)
+        elseif (kLaunchSync >= 0.5) then
+            ; Start the voice one preroll before the next downbeat; too close to it, take the bar after.
+            kLaunchDelay = ((4 - gkTransportBeat) * 60 / kLaunchBpm) - giLoopPreroll
+            if (kLaunchDelay < 0) then
+                kLaunchDelay = kLaunchDelay + (240 / kLaunchBpm)
+            endif
+        endif
+        event "i", "SampleLoopVoice", kLaunchDelay, 3600, kSlot, kGain, kDur, kBars, kToken
     endif
 
     kGot OSClisten ihOSC, "/ol/sample/loop/stop", "f", kSlot
@@ -546,8 +588,9 @@ instr OSCListen
         gkSampleToken5 = gkSampleToken5 + 1
         gkSampleToken6 = gkSampleToken6 + 1
         gkSampleToken7 = gkSampleToken7 + 1
-        turnoff2 "SampleVoice", 0, 0
-        turnoff2 "SampleLoopVoice", 0, 0
+        ; Release lets each voice fade over its linenr tail instead of cutting off with a click.
+        turnoff2 "SampleVoice", 0, 1
+        turnoff2 "SampleLoopVoice", 0, 1
     endif
 
 		 ;_______________________
@@ -882,6 +925,27 @@ instr SampleLoopVoice
     iWarpTableL ftgenonce 0, 0, 0, -1, SFile, 0, 0, 1
     iWarpTableR ftgenonce 0, 0, 0, -1, SFile, 0, 0, 2
 
+    ; A launch queued for the next bar is cancelled if its pad was stopped or relaunched meanwhile.
+    iCurrentToken = iToken
+    if (iSlot == 0) then
+        iCurrentToken = i(gkSampleToken0)
+    elseif (iSlot == 1) then
+        iCurrentToken = i(gkSampleToken1)
+    elseif (iSlot == 2) then
+        iCurrentToken = i(gkSampleToken2)
+    elseif (iSlot == 3) then
+        iCurrentToken = i(gkSampleToken3)
+    elseif (iSlot == 4) then
+        iCurrentToken = i(gkSampleToken4)
+    elseif (iSlot == 5) then
+        iCurrentToken = i(gkSampleToken5)
+    elseif (iSlot == 6) then
+        iCurrentToken = i(gkSampleToken6)
+    else
+        iCurrentToken = i(gkSampleToken7)
+    endif
+    iCancelled = (iCurrentToken != iToken ? 1 : 0)
+
     ; Global gates let each pad loop stop independently without channel update races.
     kGate init 1
     kCurrentToken init 0
@@ -969,6 +1033,9 @@ instr SampleLoopVoice
     if (kAge > 0.05 && (kGate < 0.5 || kCurrentToken != iToken)) then
         turnoff
     endif
+    if (iCancelled == 1) then
+        turnoff
+    endif
 
     kBpm chnget "transport_bpm"
     kBpm = limit(kBpm, 40, 240)
@@ -980,17 +1047,29 @@ instr SampleLoopVoice
     kSyncedRate = iSampleDur / max(0.02, kLoopDur)
     kRate = (kSyncedRate * kTempoSync) + (1 * (1 - kTempoSync))
 
+    ; The voice opens giLoopPreroll before its downbeat, reading the loop's tail while muted, so the
+    ; phase vocoder is warmed up and the first attack lands whole and on the beat.
+    iStartBpm chnget "transport_bpm"
+    iStartBpm = limit(iStartBpm, 40, 240)
+    iStartSync chnget "transport_sync"
+    iStartRate = (iStartSync >= 0.5 ? iSampleDur / ((60 / iStartBpm) * 4 * iBars) : 1)
+    iPrerollFileSec = min(giLoopPreroll * iStartRate, iSampleDur * 0.5)
+
     ; Resample mode changes speed and pitch; Warp mode changes loop length while keeping pitch at 1x.
-    aDiskL, aDiskR diskin2 SFile, kRate, 0, 1
-    aWarpL temposcal kSyncedRate, 1, 1, iWarpTableL, 1
-    aWarpR temposcal kSyncedRate, 1, 1, iWarpTableR, 1
+    ; Both read one shared loop position, so switching modes mid-loop stays in time.
+    aDiskL, aDiskR diskin2 SFile, kRate, iSampleDur - iPrerollFileSec, 1
+    aLoopPos phasor kRate / iSampleDur, 1 - (iPrerollFileSec / iSampleDur)
+    ; A 128-sample hop (decimation 16) keeps Warp attacks within ~3 ms of the beat; the default 512 drifts up to ~12 ms.
+    aWarpL mincer aLoopPos * iSampleDur, 1, 1, iWarpTableL, 1, 2048, 16
+    aWarpR mincer aLoopPos * iSampleDur, 1, 1, iWarpTableR, 1, 2048, 16
     kWarpMode = kTempoSync * kWarp
     aFileL = (aDiskL * (1 - kWarpMode)) + (aWarpL * kWarpMode)
     aFileR = (aDiskR * (1 - kWarpMode)) + (aWarpR * kWarpMode)
     aEnv linenr 1, 0.003, 0.025, 0.01
-    kPadGain = limit(kPadGain, 0, 16)
-    aPadL = aFileL * kPadGain * aEnv
-    aPadR = aFileR * kPadGain * aEnv
+    aDownbeatGate linseg 0, giLoopPreroll, 0, 0.003, 1
+    kPadGain = limit(kPadGain, 0, 16) * (1 - iCancelled)
+    aPadL = aFileL * kPadGain * aEnv * aDownbeatGate
+    aPadR = aFileR * kPadGain * aEnv * aDownbeatGate
     gaSampleDryL = gaSampleDryL + aPadL
     gaSampleDryR = gaSampleDryR + aPadR
     gaSamplePitchL = gaSamplePitchL + (aPadL * limit(kPitchSend, 0, 1))
@@ -1462,6 +1541,7 @@ endin
 <CsScore>
 ; Start both instruments for one hour (3600 seconds)
 i "InitDefaults" 0 0.01
+i "Transport" 0 3600
 i "OSCListen" 0 3600
 i "Live"      0 3600
 </CsScore>

@@ -155,6 +155,30 @@ export function Live() {
     }
   };
 
+  const handleReset = async () => {
+    // Reset wipes a whole performance setup, so ask first; pads keep their audio, names, and play modes.
+    const message = sampleMode
+      ? "Reset all effects, master, tempo, and every pad's volume and FX sends to defaults?"
+      : "Reset all effects, master, and input settings to defaults?";
+    if (!window.confirm(message)) return;
+    setBusy(true);
+    setSampleBusy(true);
+    setError(null);
+    try {
+      const nextStatus = await api.resetParams();
+      setStatus(nextStatus);
+      setValues({ ...defaultParamValues, ...nextStatus.params });
+      if (sampleMode) {
+        setSampleSlots(await api.resetSamples());
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+      setSampleBusy(false);
+    }
+  };
+
   const handleParam = async (path: string, value: number) => {
     setValues((current) => ({ ...current, [path]: value }));
     try {
@@ -334,6 +358,17 @@ export function Live() {
     }
   };
 
+  const handleStopAllSamples = async () => {
+    setError(null);
+    try {
+      const nextStatus = await api.stopAllSamples();
+      setStatus(nextStatus);
+      setSampleSlots(await api.samples());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
+
   const handleTriggerSample = async (slot: number) => {
     setError(null);
     try {
@@ -415,6 +450,7 @@ export function Live() {
             onApply={handleApplySelection}
             onStart={handleStart}
             onStop={handleStop}
+            onReset={handleReset}
             onRefresh={refresh}
           />
           <InputGainControl values={values} onChange={handleParam} />
@@ -461,6 +497,8 @@ export function Live() {
           onBpmChange={handleBpm}
           onTempoSyncChange={handleTempoSync}
           onTempoWarpChange={handleTempoWarp}
+          onStopAll={handleStopAllSamples}
+          onReset={handleReset}
         />
       ) : null}
 

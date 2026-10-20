@@ -76,6 +76,9 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ path, value }),
     }),
+  resetParams: () => request<LiveStatus>("/live/params/reset", { method: "POST" }),
+  resetSamples: () => request<SampleSlot[]>("/live/samples/reset", { method: "POST" }),
+  stopAllSamples: () => request<LiveStatus>("/live/samples/stop-all", { method: "POST" }),
   paramsBatch: (updates: ParamUpdate[]) =>
     request<LiveStatus>("/live/params/batch", {
       method: "PATCH",

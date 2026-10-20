@@ -57,7 +57,7 @@ Live Mode features:
 - Real input/output device discovery from `csound --devices`
 - Device selectors using actual `adc` and `dac` ids
 - Channel-aware Csound launch based on selected device channel counts
-- Input Gain trim for the live mic, from `-12 dB` to `+36 dB` (default `+12 dB`)
+- Input Gain trim for the live mic, from `-12 dB` to `+36 dB` (default `0 dB`)
 - Dedicated OnLive 音 Console, shown only while Live Mode is selected
 - Apply selection, Start, Stop, and Refresh controls for audio routing
 - Live input is muted when Sample Mode is selected, so sample playback does not mix with microphone feedback
@@ -91,6 +91,7 @@ Sample Mode features:
 - Per-pad FX Sends drawer that stays available on loaded pads
 - FX Sends only show currently active Live effects, so inactive effects do not clutter the pad
 - Delete and replace controls for each pad
+- Stop All button that stops every playing pad while the engine keeps running
 
 Sample Mode is best for:
 
@@ -294,12 +295,15 @@ Live engine:
 - `GET /api/live/logs`
 - `PATCH /api/live/params`
 - `PATCH /api/live/params/batch`
+- `POST /api/live/params/reset`
 - `GET /api/live/effects/code`
 
 Sample Mode:
 
 - `GET /api/live/samples`
 - `POST /api/live/samples/mode`
+- `POST /api/live/samples/reset`
+- `POST /api/live/samples/stop-all`
 - `PUT /api/live/samples/{slot}`
 - `PATCH /api/live/samples/{slot}`
 - `DELETE /api/live/samples/{slot}`

@@ -84,18 +84,18 @@ DEFAULT_PARAMS = {
     "/ol/flanger/lfo": 0.5,
     "/ol/ats/variant": 0.0,
     "/ol/ats/on": 0.0,
-    "/ol/ats/wet": 0.35,
-    "/ol/ats/morph": 0.65,
+    "/ol/ats/wet": 0.5,
+    "/ol/ats/morph": 0.5,
     "/ol/ats/speed": 1.0,
-    "/ol/input/gain": 12.0,
+    "/ol/input/gain": 0.0,
     "/ol/eq/low": 0.0,
     "/ol/eq/mid": 0.0,
     "/ol/eq/high": 0.0,
-    "/ol/master/volume": 1.0,
-    "/ol/limiter/threshold": -3.0,
-    "/ol/limiter/ceiling": -1.0,
-    "/ol/limiter/attack": 2.0,
-    "/ol/limiter/release": 140.0,
+    "/ol/master/volume": 0.5,
+    "/ol/limiter/threshold": 0.0,
+    "/ol/limiter/ceiling": 0.0,
+    "/ol/limiter/attack": 30.0,
+    "/ol/limiter/release": 20.0,
 }
 
 
@@ -250,6 +250,19 @@ class CsoundEngine:
             self.last_message = "Effect parameters synchronized."
 
         for path, value in normalized_updates:
+            self._osc.send(path, value)
+        return self.status()
+
+    def reset_params(self) -> LiveStatus:
+        """Restore every control to its default while keeping the current source mode."""
+
+        with self._lock:
+            sample_mode_value = self.params.get("/ol/mode/sample", DEFAULT_PARAMS["/ol/mode/sample"])
+            self.params = {**DEFAULT_PARAMS, "/ol/mode/sample": sample_mode_value}
+            snapshot = list(self.params.items())
+            self.last_message = "All parameters reset to defaults."
+
+        for path, value in snapshot:
             self._osc.send(path, value)
         return self.status()
 

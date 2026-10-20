@@ -1,4 +1,5 @@
-import { Grid3X3, Timer } from "lucide-react";
+import { useRef, useState, type KeyboardEvent } from "react";
+import { Grid3X3, RotateCcw, Square, Timer } from "lucide-react";
 
 import { SamplePad } from "./SamplePad";
 import { midiTargetAttrs } from "../lib/midiLearn";
@@ -23,6 +24,8 @@ type SamplePadSectionProps = {
   onBpmChange: (bpm: number) => void;
   onTempoSyncChange: (enabled: boolean) => void;
   onTempoWarpChange: (enabled: boolean) => void;
+  onStopAll: () => void;
+  onReset: () => void;
 };
 
 const emptySlots: SampleSlot[] = Array.from({ length: 8 }, (_, slot) => ({
@@ -63,6 +66,8 @@ export function SamplePadSection({
   onBpmChange,
   onTempoSyncChange,
   onTempoWarpChange,
+  onStopAll,
+  onReset,
 }: SamplePadSectionProps) {
   const paddedSlots = emptySlots.map((fallback) => slots.find((slot) => slot.slot === fallback.slot) ?? fallback);
 
@@ -95,6 +100,7 @@ export function SamplePadSection({
             <button
               className={tempoSync ? "is-active" : ""}
               type="button"
+              title="Loops follow the BPM and start on the next bar"
               onClick={() => onTempoSyncChange(true)}
               {...midiTargetAttrs({
                 id: "param:/ol/transport/sync",
@@ -163,16 +169,28 @@ export function SamplePadSection({
           >
             <Timer size={15} aria-hidden />
             <span>BPM</span>
-            <input
-              type="number"
-              min={40}
-              max={240}
-              step={1}
-              disabled={!tempoSync}
-              value={Math.round(bpm)}
-              onChange={(event) => onBpmChange(Number(event.target.value))}
-            />
+            <BpmInput bpm={bpm} disabled={!tempoSync} onCommit={onBpmChange} />
           </label>
+          <button
+            className="stop-action sample-header-action"
+            type="button"
+            disabled={!running}
+            onClick={onStopAll}
+            title="Stop every playing pad"
+          >
+            <Square size={14} aria-hidden />
+            Stop All
+          </button>
+          <button
+            className="reset-action sample-header-action"
+            type="button"
+            disabled={busy}
+            onClick={onReset}
+            title="Reset effects, master, tempo, and pad volume/FX sends to defaults"
+          >
+            <RotateCcw size={15} aria-hidden />
+            Reset
+          </button>
         </div>
       </header>
       <div className="sample-pad-grid">
@@ -196,5 +214,62 @@ export function SamplePadSection({
         ))}
       </div>
     </section>
+  );
+}
+
+type BpmInputProps = {
+  bpm: number;
+  disabled: boolean;
+  onCommit: (bpm: number) => void;
+};
+
+// Typing edits a local draft and only commits on Enter or blur, so a half-typed "1" on the way
+// to "115" is never clamped to 40 and sent to Csound. Arrow keys still nudge by 1 (Shift: 10).
+function BpmInput({ bpm, disabled, onCommit }: BpmInputProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const draftRef = useRef<string | null>(null);
+  const rounded = Math.round(bpm);
+
+  const updateDraft = (next: string | null) => {
+    draftRef.current = next;
+    setDraft(next);
+  };
+
+  const commitDraft = () => {
+    const pending = draftRef.current;
+    updateDraft(null);
+    if (pending === null || pending.trim() === "") return;
+    const next = Number(pending);
+    if (Number.isFinite(next) && Math.round(next) !== rounded) onCommit(next);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.currentTarget.blur();
+    } else if (event.key === "Escape") {
+      updateDraft(null);
+      event.currentTarget.blur();
+    } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      event.preventDefault();
+      const step = (event.shiftKey ? 10 : 1) * (event.key === "ArrowUp" ? 1 : -1);
+      updateDraft(null);
+      onCommit(rounded + step);
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={40}
+      max={240}
+      step={1}
+      disabled={disabled}
+      value={draft ?? String(rounded)}
+      onChange={(event) => updateDraft(event.target.value)}
+      onBlur={commitDraft}
+      onKeyDown={handleKeyDown}
+      title="Type a tempo and press Enter · ↑/↓ for ±1, Shift for ±10"
+    />
   );
 }

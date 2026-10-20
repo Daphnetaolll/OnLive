@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import sqrt
+from math import log2, sqrt
 
 from pydub import AudioSegment
 
@@ -11,6 +11,11 @@ MAX_TEMPO_BPM = 240.0
 ANALYSIS_RATE = 11025
 FRAME_SIZE = 1024
 HOP_SIZE = 512
+LOOP_BAR_CHOICES = (1, 2, 4, 8)
+LOOP_TEMPO_RANGE = (70.0, 180.0)
+# Snap to the whole-bar tempo unless a confident detection disagrees by more than ~7%.
+LOOP_SNAP_OCTAVES = 0.1
+CONFIDENT_DETECTION = 0.6
 
 
 @dataclass(frozen=True)
@@ -102,3 +107,52 @@ def _tempo_preference(bpm: float) -> float:
     if 60 <= bpm < 80 or 180 < bpm <= 220:
         return 0.92
     return 0.82
+
+
+@dataclass(frozen=True)
+class LoopTempo:
+    """Tempo and bar count at which a sample loops cleanly in 4/4."""
+
+    bpm: float
+    bars: int
+
+
+def estimate_loop_tempo(duration: float, detected: TempoEstimate | None) -> LoopTempo | None:
+    """Pick the tempo at which the sample spans a whole number of 4/4 bars.
+
+    Loops are exported as whole bars, so their length pins the tempo far more reliably than onset
+    autocorrelation, which often lands on half or double time. Returns None for one-shots, or when
+    a confident detection clearly disagrees, so phrases that are not bar loops keep their analysis.
+    """
+
+    if duration <= 0:
+        return None
+    candidates = [
+        LoopTempo(bpm=bars * 240.0 / duration, bars=bars)
+        for bars in LOOP_BAR_CHOICES
+        if LOOP_TEMPO_RANGE[0] <= bars * 240.0 / duration <= LOOP_TEMPO_RANGE[1]
+    ]
+    if not candidates:
+        return None
+
+    reference = detected.bpm if detected else 120.0
+
+    # Half and double time are the same groove, so distance is measured on octaves folded to one.
+    def folded_distance(candidate: LoopTempo) -> float:
+        octaves = log2(candidate.bpm / reference)
+        return abs(octaves - round(octaves))
+
+    # Near-equal folded distances (75 vs 150 against 148) tie; the one nearest the detection wins.
+    best = min(candidates, key=lambda candidate: (round(folded_distance(candidate), 2), abs(log2(candidate.bpm / reference))))
+    if detected and detected.confidence >= CONFIDENT_DETECTION and folded_distance(best) > LOOP_SNAP_OCTAVES:
+        return None
+    return LoopTempo(bpm=round(best.bpm, 1), bars=best.bars)
+
+
+def loop_bars_for(duration: float, bpm: float) -> int:
+    """Nearest bar count the loop-length menu offers for a sample played at a given tempo."""
+
+    if duration <= 0 or bpm <= 0:
+        return 1
+    raw_bars = duration * bpm / 240.0
+    return min(LOOP_BAR_CHOICES, key=lambda bars: abs(log2(bars / raw_bars)))

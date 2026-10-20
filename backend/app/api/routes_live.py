@@ -6,7 +6,7 @@ from app.schemas.live import DeviceList, EffectCodeSnippet, LiveStatus, ParamBat
 from app.schemas.samples import SampleModeUpdate, SampleSlot, SampleSlotUpdate
 from app.services.csound_engine import engine
 from app.services.effect_code import list_effect_code_snippets
-from app.services.sample_bank import sample_bank
+from app.services.sample_bank import DEFAULT_EFFECT_SENDS, sample_bank
 from app.services.telemetry import telemetry
 
 
@@ -81,6 +81,13 @@ def update_params(payload: ParamBatchUpdate) -> LiveStatus:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post("/params/reset", response_model=LiveStatus)
+def reset_params() -> LiveStatus:
+    """Return every effect, master, transport, and input control to its default value."""
+
+    return engine.reset_params()
+
+
 @router.get("/logs", response_model=list[str])
 def logs() -> list[str]:
     """Return recent Csound process output for the frontend console."""
@@ -94,7 +101,7 @@ def effect_code() -> list[EffectCodeSnippet]:
 
     try:
         return list_effect_code_snippets()
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
@@ -110,6 +117,31 @@ def set_sample_mode(payload: SampleModeUpdate) -> LiveStatus:
     """Toggle exclusive Sample Mode without mixing with microphone input."""
 
     return engine.set_sample_mode(payload.enabled)
+
+
+@router.post("/samples/stop-all", response_model=LiveStatus)
+def stop_all_samples() -> LiveStatus:
+    """Stop every playing pad at once while the engine keeps running, like Stop All Clips."""
+
+    return engine.stop_all_samples()
+
+
+@router.post("/samples/reset", response_model=list[SampleSlot])
+def reset_samples() -> list[SampleSlot]:
+    """Return every loaded pad's volume and FX sends to defaults, keeping its audio and playback settings."""
+
+    active_slots = engine.active_sample_slots()
+    for slot in sample_bank.list_slots(active_slots):
+        if not slot.loaded:
+            continue
+        next_slot = sample_bank.update_slot(
+            slot.slot,
+            SampleSlotUpdate(gain_db=0.0, effect_sends=DEFAULT_EFFECT_SENDS),
+            active_slots,
+        )
+        engine.update_sample_gain(slot.slot, next_slot.gain)
+        engine.update_sample_sends(slot.slot, next_slot.effect_sends)
+    return sample_bank.list_slots(active_slots)
 
 
 @router.put("/samples/{slot}", response_model=SampleSlot)

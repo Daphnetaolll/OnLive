@@ -11,7 +11,7 @@ from pydub import AudioSegment
 
 from app.core.paths import SAMPLE_STORAGE_DIR
 from app.schemas.samples import SamplePlayMode, SampleSlot, SampleSlotUpdate
-from app.services.tempo_detection import detect_tempo
+from app.services.tempo_detection import detect_tempo, estimate_loop_tempo, loop_bars_for
 
 
 SAMPLE_SLOT_COUNT = 8
@@ -76,6 +76,10 @@ class SampleBank:
             normalized = audio.set_frame_rate(44100).set_channels(2).set_sample_width(2)
             normalized.export(target, format="wav")
             tempo = detect_tempo(audio)
+            # Prefer the whole-bar tempo for loops, and size the loop to it so Sync plays it at the right speed.
+            loop_tempo = estimate_loop_tempo(duration, tempo)
+            detected_bpm = loop_tempo.bpm if loop_tempo else (tempo.bpm if tempo else None)
+            loop_bars = loop_tempo.bars if loop_tempo else (loop_bars_for(duration, tempo.bpm) if tempo else 1)
             analysis = _analyze_sample_audio(normalized)
 
             metadata = self._read_metadata()
@@ -84,14 +88,14 @@ class SampleBank:
                 "name": existing_name or filename,
                 "duration": round(duration, 3),
                 "size_bytes": target.stat().st_size,
-                "detected_bpm": tempo.bpm if tempo else None,
+                "detected_bpm": detected_bpm,
                 "tempo_confidence": tempo.confidence if tempo else None,
                 "gain_db": 0.0,
                 "gain": 1.0,
                 **analysis,
                 "effect_sends": DEFAULT_EFFECT_SENDS.copy(),
                 "play_mode": "one_shot",
-                "loop_bars": 1,
+                "loop_bars": loop_bars,
             }
             self._write_metadata(metadata)
             return self.get_slot(slot)

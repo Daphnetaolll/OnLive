@@ -1,4 +1,4 @@
-import { Play, RefreshCw, Square } from "lucide-react";
+import { Play, RefreshCw, RotateCcw, Square } from "lucide-react";
 
 type TransportControlsProps = {
   running: boolean;
@@ -8,6 +8,7 @@ type TransportControlsProps = {
   onApply: () => void;
   onStart: () => void;
   onStop: () => void;
+  onReset: () => void;
   onRefresh: () => void;
 };
 
@@ -19,6 +20,7 @@ export function TransportControls({
   onApply,
   onStart,
   onStop,
+  onReset,
   onRefresh,
 }: TransportControlsProps) {
   return (
@@ -34,7 +36,11 @@ export function TransportControls({
         <Square size={18} aria-hidden />
         Stop
       </button>
-      <button className="icon-action" type="button" disabled={busy} onClick={onRefresh} aria-label="Refresh devices">
+      <button className="reset-action" type="button" disabled={busy} onClick={onReset} title="Reset all parameters to defaults">
+        <RotateCcw size={18} aria-hidden />
+        Reset
+      </button>
+      <button className="icon-action" type="button" disabled={busy} onClick={onRefresh} aria-label="Refresh devices" title="Refresh device list">
         <RefreshCw size={18} aria-hidden />
       </button>
     </div>
